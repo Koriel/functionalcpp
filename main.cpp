@@ -26,7 +26,7 @@ namespace functionalcpp {
     //todo: associateBy
     template<typename a, typename b>
     inline std::unordered_map<b,a> associateBy(std::vector<a> &items, std::function<b (a&)> f) {
-        return associate(items, [f](a &item){ return pair<b,a>(f(item), item); } );
+        return associate(items, [f](a &item){ return std::pair<b,a>(f(item), item); } );
     }
 
     //todo: test
@@ -88,7 +88,7 @@ namespace functionalcpp {
     template<typename a, typename b>
     inline std::vector<b> map(std::vector<a> &items, std::function<std::vector<b>(a)> f) {
         std::vector<b> list;
-        list.resize(items.size());
+        list.reserve(items.size());
         transform(items.begin(), items.end(), list.begin(), f);
         return list;
     }
@@ -103,10 +103,14 @@ namespace functionalcpp {
     }
 
     template<typename a>
-    inline std::vector<a> filter(std::vector<a> &items, std::function<bool(a)> f) {
+    inline std::vector<a> filter(std::vector<a> &items, std::function<bool(a&)> f) {
         std::vector<a> list;
-        list.resize(items.size());
-        std::copy_if(items.begin(), items.end(), list.begin(), f);
+        list.reserve(items.size());
+//        std::copy_if(items.begin(), items.end(), list.begin(), f);
+        for( auto &item : items ) {
+            if( f(item) )
+                list.push_back(item);
+        }
         return list;
     }
 
@@ -133,6 +137,37 @@ namespace functionalcpp {
 
 }
 
+//template<typename a>
+//typedef std::function<std::vector<a> *(std::vector<a> *obj)> VectorClassExtension;
+
+// Overload the ">>" operator because we cannot overload "->" to execute the extension.
+template<typename a>
+std::vector<a> operator>>(std::vector<a>& inputVector, std::function<std::vector<a> (std::vector<a>& obj)> method)
+{
+    return method(inputVector);
+}
+
+template<typename a>
+std::vector<a> operator|(std::vector<a>& inputVector, std::function<std::vector<a> (std::vector<a>& obj)> method)
+{
+    return method(inputVector);
+}
+// Typical extensions.
+
+template<typename a>
+std::function<std::vector<a>(std::vector<a>&)> filter(std::function<bool(a&)> predicate)
+{
+    return [=](std::vector<a>& pobj) {
+        return functionalcpp::filter<a>( pobj, predicate );
+    };
+}
+template<typename a, typename b>
+std::function<std::vector<b>(std::vector<a>&)> map(std::function<std::vector<b>(a&)> f) {
+    return [=](std::vector<a>& pobj) {
+        return map( pobj, f );
+    };
+}
+
 
 struct Person {
     int id;
@@ -143,6 +178,13 @@ int main() {
     std::vector<Person> persons = {{1, "Yes",       3.0},
                                    {2, "No",        42.0},
                                    {3, "Yogi Bear", 33.0}};
+
+//    std::function<std::vector<a>(std::vector<a>)> filter(std::function<bool(a)> predicate)
+    filter<int>( [](int a) { return true; } );
+    auto filterFunction = filter<Person>( [](Person &a) { return a.age > 5; } );
+    auto filteredPersons = persons >> filterFunction;
+    auto filteredPersonsPiped = persons | filter<Person>( [](Person &a) { return a.age > 5; } ) | map<Person, int>([](Person &a) { return a.age; });
+
     auto myMap = functionalcpp::associate<Person, std::string, int>(persons, [](auto person) {
         return std::pair<std::string, int>(person.name, person.id);
     });
